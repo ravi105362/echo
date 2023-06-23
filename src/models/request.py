@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Json
+from pydantic import BaseModel
 from enum import Enum
+from typing import Optional
 
 
 class StringValueRepresentationEnumMixin(str, Enum):
@@ -25,8 +26,8 @@ class Headers(BaseModel):
 
 class Response(BaseModel):
     code: int
-    headers: dict
-    body: str
+    headers: Optional[dict]
+    body: Optional[str]
 
 
 class EndpointRequest(BaseModel):

@@ -1,5 +1,5 @@
 from src.database import Base
-from sqlalchemy import Column, Boolean, Integer, String, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, JSON
 
 
 class Endpoint(Base):
@@ -9,4 +9,4 @@ class Endpoint(Base):
     path = Column(String, unique=True)
     code = Column(String)
     headers = Column(JSON, nullable=True)
-    body = Column(String)
+    body = Column(String, nullable=True)
