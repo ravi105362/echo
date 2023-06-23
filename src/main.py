@@ -10,8 +10,7 @@ import src.models
 
 app = FastAPI()
 
-EndpointRequestJson, EndpointResponseJson = JsonApiModel(
-    'endpoints', EndpointRequest)
+EndpointRequestJson, EndpointResponseJson = JsonApiModel("endpoints", EndpointRequest)
 
 
 def get_db():
@@ -49,25 +48,26 @@ async def custom_exception_handler(request: Request, exc: CustomException):
             "errors": [
                 {
                     "code": "not_found",
-                    "detail": f"Requested page `/{exc.name}` does not exist"
+                    "detail": f"Requested page `/{exc.name}` does not exist",
                 }
             ],
-        }
+        },
     )
 
 
-@ app.get("/endpoints")
+@app.get("/endpoints")
 def read_all():
     db = sessionLocal()
     endpoint = db.query(model.Endpoint).all()
     return {"endpoint": endpoint}
 
 
-@ app.get("/{path_param}", dependencies=[Depends(application_vnd)])
+@app.get("/{path_param}", dependencies=[Depends(application_vnd)])
 def read_root(path_param: str):
     db = sessionLocal()
-    endpoint = db.query(model.Endpoint).filter(
-        model.Endpoint.path == f"/{path_param}").first()
+    endpoint = (
+        db.query(model.Endpoint).filter(model.Endpoint.path == f"/{path_param}").first()
+    )
     if endpoint is not None:
         return EndpointResponseJson(
             data=EndpointResponseJson.resource_object(
@@ -78,25 +78,34 @@ def read_root(path_param: str):
                     "response": {
                         "code": endpoint.code,
                         "headers": endpoint.headers,
-                        "body": endpoint.body
-                    }
-                }
-            ))
+                        "body": endpoint.body,
+                    },
+                },
+            )
+        )
     else:
         raise CustomException(name=path_param)
 
 
-@ app.post("/endpoints", status_code=201, dependencies=[Depends(application_vnd)])
+@app.post("/endpoints", status_code=201, dependencies=[Depends(application_vnd)])
 def create_endpoint(req: EndpointRequestJson):
     db = sessionLocal()
     data = req.data.attributes
     try:
-        to_add = model.Endpoint(verb=data.verb,
-                                path=data.path, code=data.response.code, headers=data.response.headers, body=data.response.body)
+        to_add = model.Endpoint(
+            verb=data.verb,
+            path=data.path,
+            code=data.response.code,
+            headers=data.response.headers,
+            body=data.response.body,
+        )
         db.add(to_add)
         db.commit()
-        endpoint = db.query(model.Endpoint).filter(
-            model.Endpoint.path == f"{data.path}").first()
+        endpoint = (
+            db.query(model.Endpoint)
+            .filter(model.Endpoint.path == f"{data.path}")
+            .first()
+        )
         return EndpointResponseJson(
             data=EndpointResponseJson.resource_object(
                 id=endpoint.id,
@@ -106,24 +115,23 @@ def create_endpoint(req: EndpointRequestJson):
                     "response": {
                         "code": endpoint.code,
                         "headers": endpoint.headers,
-                        "body": endpoint.body
-                    }
-                }
-            ))
+                        "body": endpoint.body,
+                    },
+                },
+            )
+        )
 
     except Exception as exc:
         raise HTTPException(status_code=409, detail="This path already exists")
 
 
-@ app.patch("/endpoints/{id}", status_code=200, dependencies=[Depends(application_vnd)])
+@app.patch("/endpoints/{id}", status_code=200, dependencies=[Depends(application_vnd)])
 def update_endpoint(id: int, req: EndpointRequestJson):
     db = sessionLocal()
     data = req.data.attributes
-    endpoint = db.query(model.Endpoint).filter(
-        model.Endpoint.id == id).first()
+    endpoint = db.query(model.Endpoint).filter(model.Endpoint.id == id).first()
     if endpoint is None:
-        raise HTTPException(
-            status_code=404, detail="This path does not exists")
+        raise HTTPException(status_code=404, detail="This path does not exists")
 
     endpoint.verb = data.verb
     endpoint.path = data.path
@@ -141,17 +149,16 @@ def update_endpoint(id: int, req: EndpointRequestJson):
                 "response": {
                     "code": endpoint.code,
                     "headers": endpoint.headers,
-                    "body": endpoint.body
-                }
-            }
-        ))
+                    "body": endpoint.body,
+                },
+            },
+        )
+    )
 
 
-@ app.delete("/endpoints/{id}", status_code=204, dependencies=[Depends(application_vnd)])
+@app.delete("/endpoints/{id}", status_code=204, dependencies=[Depends(application_vnd)])
 def delete_endpoint(id: int):
     db = sessionLocal()
-    endpoint = db.query(model.Endpoint).filter(
-        model.Endpoint.id == id).delete()
+    endpoint = db.query(model.Endpoint).filter(model.Endpoint.id == id).delete()
     if endpoint == 0:
-        raise HTTPException(
-            status_code=404, detail="This path does not exists")
+        raise HTTPException(status_code=404, detail="This path does not exists")
