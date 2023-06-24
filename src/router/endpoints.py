@@ -1,21 +1,17 @@
-from pydantic_jsonapi import JsonApiModel
 from fastapi import (
     APIRouter,
-    HTTPException,
-    status,
-    Header,
     Depends,
     Response,
 )
 from src.models import model
 from src.database import sessionLocal
-from src.models.request import EndpointRequest
-from src.utils import CustomException
-
-EndpointRequestJson, EndpointResponseJson\
-     = JsonApiModel("endpoints", EndpointRequest)
+from src.utils import CustomException, application_vnd,\
+     response_object, EndpointRequestJson, EndpointResponseJson
+from sqlalchemy.orm import Session
+from src.utils import get_logger
 
 router = APIRouter()
+logging = get_logger()
 
 
 def get_db():
@@ -26,56 +22,47 @@ def get_db():
         db.close()
 
 
-def application_vnd(content_type: str = Header(...)):
-    """Require request MIME-type to be application/vnd.api+json"""
-
-    if content_type != "application/vnd.api+json":
-        raise HTTPException(
-            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            f"Unsupported media type: {content_type}."
-            " It must be application/vnd.api+json",
-        )
-
-
 @router.get("/endpoints", dependencies=[Depends(application_vnd)])
-def read_all(response: Response):
-    db = sessionLocal()
+async def read_all(response: Response, db: Session = Depends(get_db)):
+    """ Returns all the endpoints created """
+
     response.headers["content-type"] = "application/vnd.api+json"
     endpoint = db.query(model.Endpoint).all()
-    result = [
-        EndpointResponseJson.resource_object(
-            id=point.id,
-            attributes={
-                "verb": point.verb,
-                "path": point.path,
-                "response": {
-                    "code": point.code,
-                    "headers": point.headers,
-                    "body": point.body,
-                },
-            },
-        ) for point in endpoint
-    ]
+    result = [response_object(point) for point in endpoint]
+    logging.info("Read all fetched")
     return {"data": result}
 
 
 @router.get("/{path_param}", dependencies=[Depends(application_vnd)])
-def read_root(path_param: str, response: Response):
-    db = sessionLocal()
+async def read_root(path_param: str,
+                    response: Response,
+                    db: Session = Depends(get_db)):
+    """ Returns the response for created endpoints """
+
     response.headers["content-type"] = "application/vnd.api+json"
     endpoint = (db.query(model.Endpoint).filter(
         model.Endpoint.path == f"/{path_param}").first())
+
     if endpoint is not None:
+        for key, value in endpoint.headers.items():
+            response.headers[key] = value
         return endpoint.body
     else:
-        raise CustomException(msg="Requested page", name=f"/{path_param}")
+        logging.error(f"Endpoint with path {path_param} not found")
+        raise CustomException(msg="Requested page",
+                              name=f"/{path_param}",
+                              end_msg="does not exists",
+                              status=404)
 
 
 @router.post("/endpoints",
              status_code=201,
              dependencies=[Depends(application_vnd)])
-def create_endpoint(req: EndpointRequestJson, response: Response):
-    db = sessionLocal()
+async def create_endpoint(req: EndpointRequestJson,
+                          response: Response,
+                          db: Session = Depends(get_db)):
+    """ Creates the new endpoint """
+
     response.headers["content-type"] = "application/vnd.api+json"
     data = req.data.attributes
     try:
@@ -90,67 +77,65 @@ def create_endpoint(req: EndpointRequestJson, response: Response):
         db.commit()
         endpoint = (db.query(model.Endpoint).filter(
             model.Endpoint.path == f"{data.path}").first())
-        return EndpointResponseJson(data=EndpointResponseJson.resource_object(
-            id=endpoint.id,
-            attributes={
-                "verb": endpoint.verb,
-                "path": endpoint.path,
-                "response": {
-                    "code": endpoint.code,
-                    "headers": endpoint.headers,
-                    "body": endpoint.body,
-                },
-            },
-        ))
+        return EndpointResponseJson(data=response_object(endpoint))
 
     except Exception:
-        raise HTTPException(status_code=409, detail="This path already exists")
+        logging.error(f"Endpoint with path {data.path} not created")
+        raise CustomException(msg="Requested page",
+                              name=f"{data.path}",
+                              end_msg="already exists",
+                              status=409)
 
 
 @router.patch("/endpoints/{id}",
               status_code=200,
               dependencies=[Depends(application_vnd)])
-def update_endpoint(id: int, req: EndpointRequestJson, response: Response):
-    db = sessionLocal()
-    response.headers["content-type"] = "application/vnd.api+json"
+async def update_endpoint(id: int,
+                          req: EndpointRequestJson,
+                          res: Response,
+                          db: Session = Depends(get_db)):
+    """ Updates the created endpoint """
+
+    res.headers["content-type"] = "application/vnd.api+json"
     data = req.data.attributes
     endpoint = db.query(model.Endpoint).filter(model.Endpoint.id == id).first()
     if endpoint is None:
-        raise HTTPException(status_code=404,
-                            detail="This path does not exists")
+        logging.error(f"Endpoint with id {id} does not exists")
+        raise CustomException(msg="Requested page",
+                              name=f"{data.path}",
+                              end_msg="does not exists",
+                              status=404)
     try:
         endpoint.verb = data.verb
         endpoint.path = data.path
         endpoint.code = data.response.code
         endpoint.headers = data.response.headers
         endpoint.body = data.response.body
-
         db.commit()
     except Exception:
-        raise HTTPException(status_code=404,
-                            detail="This new path already exists")
-    return EndpointResponseJson(data=EndpointResponseJson.resource_object(
-        id=endpoint.id,
-        attributes={
-            "verb": endpoint.verb,
-            "path": endpoint.path,
-            "response": {
-                "code": endpoint.code,
-                "headers": endpoint.headers,
-                "body": endpoint.body,
-            },
-        },
-    ))
+        logging.error(f"Endpoint with id {id} failed to update")
+        raise CustomException(msg="Requested page",
+                              name=f"{data.path}",
+                              end_msg="failed to update",
+                              status=409)
+    return EndpointResponseJson(data=response_object(endpoint))
 
 
 @router.delete("/endpoints/{id}",
                status_code=204,
                dependencies=[Depends(application_vnd)])
-def delete_endpoint(id: int, response: Response):
-    db = sessionLocal()
+async def delete_endpoint(id: int,
+                          response: Response,
+                          db: Session = Depends(get_db)):
+    """ Deletes the endpoint created """
+
     response.headers["content-type"] = "application/vnd.api+json"
     endpoint = db.query(
         model.Endpoint).filter(model.Endpoint.id == id).delete()
     db.commit()
     if endpoint == 0:
-        raise CustomException(name=id, msg="Requested Endpoint with ID")
+        logging.error(f"Endpoint with id {id} does not exists")
+        raise CustomException(name=id,
+                              msg="Requested Endpoint with ID",
+                              end_msg="does not exists",
+                              status=404)

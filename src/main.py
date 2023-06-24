@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from src.models import model
 from src.database import engine
 from src.router import endpoints
 from src.utils import CustomException
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -15,14 +15,12 @@ app.include_router(endpoints.router)
 async def custom_exception_handler(request: Request, exc: CustomException):
     headers = {"content-type": "application/vnd.api+json"}
     return JSONResponse(
-        status_code=404,
+        status_code=exc.status,
         content={
-            "errors": [
-                {
-                    "code": "not_found",
-                    "detail": f"{exc.msg} `{exc.name}` does not exist",
-                }
-            ],
+            "errors": [{
+                "code": "not_found",
+                "detail": f"{exc.msg} `{exc.name}` {exc.end_msg}",
+            }],
         },
         headers=headers,
     )
