@@ -4,7 +4,6 @@ from src.models.request import EndpointRequest
 from pydantic_jsonapi import JsonApiModel
 import logging
 from src import settings
-from dataclasses import dataclass
 
 EndpointRequestJson, EndpointResponseJson\
      = JsonApiModel("endpoints", EndpointRequest)
@@ -52,13 +51,3 @@ def get_logger():
         format="%(asctime)s :: %(levelname)s :: %(message)s",
     )
     return logging
-
-
-@dataclass
-class ResponseModel:
-    id: int
-    verb: str
-    path: str
-    code: int
-    headers: dict
-    body: str
