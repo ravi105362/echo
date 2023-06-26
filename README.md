@@ -5,6 +5,11 @@ CRUD operations are supported in echo service which creates mock endpoints
 2. On being valid data is passed on to the database.
 3. Database for local is sqlite but also, supports AWS based postgres DB.
 4. IAAC is terraform whose files are included in .tf folder.
+  
+ <img width="756" alt="Screenshot 2023-06-26 at 12 00 45 PM" src="https://github.com/ravi105362/echo/assets/25511242/bbc277a4-9a75-44eb-9e4f-7767a7564cc4">
+
+
+
 
 
 # Steps to execute -
